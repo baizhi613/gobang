@@ -79,5 +79,5 @@
         "string.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/g++-11",
-    "cmake.sourceDirectory": "/root/workplace/gobang/websocketpp-master/examples/associative_storage"
+    "cmake.sourceDirectory": "/root/workspace/gobang/websocketpp-master"
 }

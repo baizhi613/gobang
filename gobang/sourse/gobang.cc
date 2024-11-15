@@ -1,5 +1,7 @@
 #include "util.hpp"
-
+#include "db.hpp"
+#include "online.hpp"
+#include "room.hpp"
 #define HOST "127.0.0.1" // MySQL服务器地址
 #define PORT 3306        // MySQL服务器端口
 #define USER "root"      // MySQL用户名
@@ -55,8 +57,47 @@ void file_test()
     file_util::read(filename,body);
     std::cout<<body<<std::endl;
 }
+void db_test()
+{
+    user_table ut(HOST, USER, PASS, DBNAME, PORT);
+    Json::Value user;
+    //user["username"]="xiaoming";
+    //user["password"]="123123";
+    ut.win(5);
+    bool ret=ut.select_by_id(5,user);
+    std::string body;
+    json_util::serialize(user,body);
+    std::cout<<body<<std::endl;
+}
+void online_test()
+{
+    online_manager om;
+    wsserver_t::connection_ptr conn;
+    uint64_t uid=2;
+    om.enter_game_hall(uid,conn);
+    if(om.is_in_game_hall(uid))
+    {
+        DLOG("IN GAME HALL");
+    }
+    else
+    {
+        DLOG("NOT IN GAME HALL");
+    }
+    om.exit_game_hall(uid);
+    if(om.is_in_game_hall(uid))
+    {
+        DLOG("IN GAME HALL");
+    }
+    else
+    {
+        DLOG("NOT IN GAME HALL");
+    }
+}
 int main()
 {
-    file_test();
+    user_table ut(HOST, USER, PASS, DBNAME, PORT);
+    online_manager om;
+    room r(10,&ut,&om);
+    online_test();
     return 0;
 }

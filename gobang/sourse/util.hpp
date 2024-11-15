@@ -9,6 +9,11 @@
 #include <memory>
 #include <vector>
 #include <jsoncpp/json/json.h>
+#include <websocketpp/server.hpp>
+#include <websocketpp/config/asio_no_tls.hpp>
+
+typedef websocketpp::server<websocketpp::config::asio> wsserver_t;
+
 class mysql_util
 {
 public:
@@ -44,8 +49,7 @@ public:
         if (ret != 0)
         {
             ELOG("%s\n", sql.c_str());                           // 打印SQL语句
-            ELOG("mysql_query failed:%s\n", mysql_error(mysql)); // 查询失败
-            mysql_close(mysql);                                  // 关闭连接
+            ELOG("mysql_query failed:%s\n", mysql_error(mysql)); // 查询失败                                // 关闭连接
             return false;
         }
         return true;
