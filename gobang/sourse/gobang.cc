@@ -97,7 +97,7 @@ int main()
 {
     user_table ut(HOST, USER, PASS, DBNAME, PORT);
     online_manager om;
-    room r(10,&ut,&om);//游戏房间测试
-    online_test();
+    room_manager rm(&ut,&om);
+    room_ptr rp=rm.create_room(10,20);
     return 0;
 }

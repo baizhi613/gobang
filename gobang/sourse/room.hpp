@@ -106,7 +106,7 @@ public:
     }
     Json::Value handle_chess(Json::Value &req)
     {
-        Json::Value json_resp=req;
+        Json::Value json_resp = req;
         int chess_row = req["row"].asInt();
         int chess_col = req["col"].asInt();
         uint64_t cur_uid = req["uid"].asUInt64();
@@ -189,16 +189,16 @@ public:
             json_resp = handle_chess(req);
             if (json_resp["winner"].asUInt64() != 0)
             {
-                uint64_t winner_id=json_resp["winner"].asUInt64();
-                uint64_t loser_id = winner_id==_white_id?_black_id:_white_id;
+                uint64_t winner_id = json_resp["winner"].asUInt64();
+                uint64_t loser_id = winner_id == _white_id ? _black_id : _white_id;
                 _tb_user->win(_black_id);
                 _tb_user->lose(_white_id);
-                _statu=GAME_OVER;
+                _statu = GAME_OVER;
             }
         }
-        else if(req["optype"].asString()=="chat")
+        else if (req["optype"].asString() == "chat")
         {
-            json_resp=handle_chat(req);
+            json_resp = handle_chat(req);
         }
         else
         {
@@ -211,18 +211,116 @@ public:
     void broadcast(Json::Value &rsp)
     {
         std::string body;
-        json_util::serialize(rsp,body);
-        wsserver_t::connection_ptr wconn=_online_user->get_conn_from_room(_white_id);
-        if(wconn.get()!=nullptr)
+        json_util::serialize(rsp, body);
+        wsserver_t::connection_ptr wconn = _online_user->get_conn_from_room(_white_id);
+        if (wconn.get() != nullptr)
         {
             wconn->send(body);
         }
-        wsserver_t::connection_ptr bconn=_online_user->get_conn_from_room(_black_id);
-        if(wconn.get()!=nullptr)
+        wsserver_t::connection_ptr bconn = _online_user->get_conn_from_room(_black_id);
+        if (wconn.get() != nullptr)
         {
             wconn->send(body);
         }
         return;
+    }
+};
+
+using room_ptr = std::shared_ptr<room>;
+
+class room_manager
+{
+private:
+    uint64_t _next_rid;
+    std::mutex _mutex;
+    user_table *_tb_user;
+    online_manager *_online_user;
+    std::unordered_map<uint64_t, room_ptr> _rooms;
+    std::unordered_map<uint64_t, uint64_t> _users;
+
+public:
+    room_manager(user_table *ut, online_manager *om) : _next_rid(1), _tb_user(ut), _online_user(om)
+    {
+        DLOG("房间管理模块初始化完毕!");
+    }
+    ~room_manager()
+    {
+        DLOG("房间管理模块即将销毁!");
+    }
+    room_ptr create_room(uint64_t uid1, uint64_t uid2)
+    {
+        if (_online_user->is_in_game_hall(uid1) == false)
+        {
+            DLOG("用户:%lu不在大厅中,创建房间失败!", uid1);
+            return room_ptr();
+        }
+        if (_online_user->is_in_game_hall(uid2) == false)
+        {
+            DLOG("用户:%lu不在大厅中,创建房间失败!", uid2);
+            return room_ptr();
+        }
+        std::unique_lock<std::mutex> lock(_mutex);
+        room_ptr rp(new room(_next_rid, _tb_user, _online_user));
+        rp->add_white_user(uid1);
+        rp->add_black_user(uid2);
+        _rooms.insert(std::make_pair(_next_rid, rp));
+        _users.insert(std::make_pair(uid1, _next_rid));
+        _users.insert(std::make_pair(uid2, _next_rid));
+        _next_rid++;
+        return rp;
+    }
+    room_ptr get_room_by_rid(uint64_t rid)
+    {
+        std::unique_lock<std::mutex> lock(_mutex);
+        auto it = _rooms.find(rid);
+        if (it == _rooms.end())
+        {
+            return room_ptr();
+        }
+        return it->second;
+    }
+    room_ptr get_room_by_uid(uint64_t uid)
+    {
+        std::unique_lock<std::mutex> lock(_mutex);
+        auto uit = _users.find(uid);
+        if (uit == _users.end())
+        {
+            return room_ptr();
+        }
+        uint64_t rid = uit->second;
+        auto rit = _rooms.find(rid);
+        if (rit == _rooms.end())
+        {
+            return room_ptr();
+        }
+        return rit->second;
+    }
+    void remove_room(uint64_t rid)
+    {
+        room_ptr rp = get_room_by_rid(rid);
+        if (rp.get() == nullptr)
+        {
+            return;
+        }
+        uint64_t uid1 = rp->get_white_user();
+        uint64_t uid2 = rp->get_black_user();
+        std::unique_lock<std::mutex> lock(_mutex);
+        _users.erase(uid1);
+        _users.erase(uid2);
+        _rooms.erase(rid);
+    }
+    void remove_room_user(uint64_t uid)
+    {
+        room_ptr rp = get_room_by_uid(uid);
+        if (rp.get() == nullptr)
+        {
+            return;
+        }
+        rp->handle_exit(uid);
+        if (rp->player_count() == 0)
+        {
+            remove_room(rp->id());
+        }
     }
 };
 #endif
