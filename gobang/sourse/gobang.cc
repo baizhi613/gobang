@@ -3,6 +3,7 @@
 #include "online.hpp"
 #include "room.hpp"
 #include "session.hpp"
+#include "matcher.hpp"
 #define HOST "127.0.0.1" // MySQL服务器地址
 #define PORT 3306        // MySQL服务器端口
 #define USER "root"      // MySQL用户名
@@ -100,5 +101,6 @@ int main()
     online_manager om;
     room_manager rm(&ut,&om);
     room_ptr rp=rm.create_room(10,20);
+    matcher mc(&rm,&ut,&om);
     return 0;
 }
