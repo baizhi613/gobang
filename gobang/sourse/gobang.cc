@@ -2,6 +2,7 @@
 #include "db.hpp"
 #include "online.hpp"
 #include "room.hpp"
+#include "session.hpp"
 #define HOST "127.0.0.1" // MySQL服务器地址
 #define PORT 3306        // MySQL服务器端口
 #define USER "root"      // MySQL用户名
