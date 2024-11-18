@@ -19,17 +19,129 @@ private:
     session_manager _sm;
 
 private:
+    void file_handler(wsserver_t::connection_ptr &conn)
+    {
+        websocketpp::http::parser::request req = conn->get_request();
+        std::string uri = req.get_uri();
+        std::string realpath = _web_root + uri;
+        if (realpath.back() == '/')
+        {
+            realpath += "login.html";
+        }
+        std::string body;
+        bool ret = file_util::read(realpath, body);
+        if (ret == false)
+        {
+            body += "<html>";
+            body += "<head>";
+            body += "<meta charset=' UTF - 8 '/>";
+            body += "</head>";
+            body += "<body>";
+            body += "<h1> Not Found </h1>";
+            body += "</body>";
+            conn->set_status(websocketpp::http::status_code::not_found);
+            conn->set_body(body);
+            return;
+        }
+        conn->set_body(body);
+        conn->set_status(websocketpp::http::status_code::ok);
+    }
+    void http_resp(wsserver_t::connection_ptr &conn,bool result, websocketpp::http::status_code::value code, const std::string &reason)
+    {
+        Json::Value resp_json;
+        resp_json["result"] = result;
+        resp_json["reason"] = reason;
+        std::string resp_body;
+        json_util::serialize(resp_json, resp_body);
+        conn->set_status(code);
+        conn->set_body(resp_body);
+        conn->append_header("Content-Type", "application/json");
+        return;
+    }
+    void reg(wsserver_t::connection_ptr &conn)
+    {
+        websocketpp::http::parser::request req = conn->get_request();
+        std::string req_body = conn->get_request_body();
+        Json::Value login_info;
+        Json::Value resp_json;
+        bool ret = json_util::unserialize(req_body, login_info);
+        if (ret == false)
+        {
+            DLOG("反序列注册信息失败");
+            return http_resp(conn,false,websocketpp::http::status_code::bad_request,"请求的正文格式有误");
+        }
+        if (login_info["username"].isNull() || login_info["password"].isNull())
+        {
+            DLOG("用户名密码不完整");
+            return http_resp(conn,false,websocketpp::http::status_code::bad_request,"请输入用户名/密码");
+        }
+        ret = _ut.insert(login_info);
+        if (ret == false)
+        {
+            DLOG("向数据库插入数据失败");
+            return http_resp(conn,false,websocketpp::http::status_code::bad_request,"用户名已经被占用");
+        }
+        return http_resp(conn,true,websocketpp::http::status_code::ok,"注册用户成功");
+    }
+    void login(wsserver_t::connection_ptr &conn)
+    {
+        std::string req_body = conn->get_request_body();
+        Json::Value login_info;
+        bool ret = json_util::unserialize(req_body, login_info);
+        if (ret == false)
+        {
+            DLOG("反序列注册信息失败");
+            return http_resp(conn,false,websocketpp::http::status_code::bad_request,"请求的正文格式有误");
+        }
+        if (login_info["username"].isNull() || login_info["password"].isNull())
+        {
+            DLOG("用户名密码不完整");
+            return http_resp(conn,false,websocketpp::http::status_code::bad_request,"请输入用户名/密码");
+        }
+        ret=_ut.login(login_info);
+        if (ret == false)
+        {
+            DLOG("用户名密码错误");
+            std::cout<<login_info;
+            return http_resp(conn,false,websocketpp::http::status_code::bad_request,"用户名密码错误");
+        }
+        uint64_t uid=login_info["id"].asUInt64();
+        session_ptr ssp=_sm.create_session(uid,LOGIN);
+        if(ssp.get()==nullptr)
+        {
+            DLOG("创建会话失败");
+            return http_resp(conn,false,websocketpp::http::status_code::internal_server_error,"创建会话失败");
+        }
+        _sm.set_session_expire_time(ssp->ssid(),SESSION_TIMEOUT);
+        std::string cookie_ssid="SSID="+std::to_string(ssp->ssid());
+        conn->append_header("Set-Cookie",cookie_ssid);
+        return http_resp(conn,true,websocketpp::http::status_code::ok,"登录成功");
+    }
+    void info(wsserver_t::connection_ptr &conn)
+    {
+    }
     void http_callback(websocketpp::connection_hdl hdl)
     {
         wsserver_t::connection_ptr conn = _wssrv.get_con_from_hdl(hdl);
-        websocketpp::http::parser::request req=conn->get_request();
-        std::string method=req.get_method();
-        std::string uri=req.get_uri();
-        std::string pathname = _web_root + uri;
-        std::string body;
-        file_util::read(pathname, body);
-        conn->set_status(websocketpp::http::status_code::ok);
-        conn->set_body(body);
+        websocketpp::http::parser::request req = conn->get_request();
+        std::string method = req.get_method();
+        std::string uri = req.get_uri();
+        if (method == "POST" && uri == "/reg")
+        {
+            return reg(conn);
+        }
+        else if (method == "POST" && uri == "/login")
+        {
+            return login(conn);
+        }
+        else if (method == "GET" && uri == "/info")
+        {
+            return info(conn);
+        }
+        else
+        {
+            return file_handler(conn);
+        }
     }
     void wsopen_callback(websocketpp::connection_hdl hdl)
     {

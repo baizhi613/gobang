@@ -131,6 +131,7 @@ public:
         if (ifs.is_open() == false)
         {
             ELOG("%s file open failed!!", filename.c_str());
+            return false;
         }
         size_t fsize = 0;
         ifs.seekg(0, std::ios::end);

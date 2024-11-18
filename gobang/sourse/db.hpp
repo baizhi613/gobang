@@ -50,7 +50,7 @@ public:
             DLOG("INPUT PASSWORD OR USERNAME");
             return false;
         }
-#define LOGIN_USER "select id,score,total_count,win_count from user where username='%s' and password=password('%s');"
+#define LOGIN_USER "select id,score,total_count,win_count from user where username='%s' and password=SHA2('%s',256);"
         char sql[4096] = {0};
         sprintf(sql, LOGIN_USER, user["username"].asCString(), user["password"].asCString());
         MYSQL_RES *res = NULL;
