@@ -180,7 +180,7 @@ public:
     }
     void handle_request(Json::Value &req)
     {
-        Json::Value json_resp = req;
+        Json::Value json_resp;
         uint64_t room_id = req["room_id"].asUInt64();
         if (room_id != _room_id)
         {
@@ -230,9 +230,9 @@ public:
             DLOG("房间-⽩棋玩家连接获取失败");
         }
         wsserver_t::connection_ptr bconn = _online_user->get_conn_from_room(_black_id);
-        if (wconn.get() != nullptr)
+        if (bconn.get() != nullptr)
         {
-            wconn->send(body);
+            bconn->send(body);
         }
         else
         {

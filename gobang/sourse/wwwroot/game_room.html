@@ -174,6 +174,7 @@
                     oneStep(info.col, info.row, isWhite);
                     //设置棋盘信息
                     chessBoard[info.row][info.col] = 1;
+                    set_screen(is_me);
                 }
                 //是否有胜利者
                 if (info.winner == 0) {
