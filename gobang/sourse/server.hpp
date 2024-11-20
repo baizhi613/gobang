@@ -254,6 +254,35 @@ private:
         ws_resp(conn, resp_json);
         _sm.set_session_expire_time(ssp->ssid(), SESSION_FOREVER);
     }
+    void wsopen_game_room(wsserver_t::connection_ptr conn)
+    {
+        Json::Value resp_json;
+        session_ptr ssp=get_session_by_cookie(conn);
+        if(ssp.get()==nullptr)
+        {
+            return;
+        }
+        if (_om.is_in_game_hall(ssp->get_user() || _om.is_in_game_room(ssp->get_user())))
+        {
+            resp_json["optype"] = "room_ready";
+            resp_json["reason"] = "玩家重复登录!";
+            resp_json["result"] = false;
+            return ws_resp(conn, resp_json);
+        }
+        room_ptr rp=_rm.get_room_by_uid(ssp->get_user());
+        if(rp.get()==nullptr)
+        {
+            resp_json["optype"] = "room_ready";
+            resp_json["reason"] = "没有找到玩家的房间信息!";
+            resp_json["result"] = false;
+            return ws_resp(conn, resp_json);
+        }
+        _om.enter_game_room(ssp->get_user(),conn);
+        _sm.set_session_expire_time(ssp->ssid(),SESSION_FOREVER);
+        resp_json["optype"] = "room_ready";
+        resp_json["result"] = true;
+        return ws_resp(conn,resp_json);
+    }
     void wsopen_callback(websocketpp::connection_hdl hdl)
     {
         wsserver_t::connection_ptr conn = _wssrv.get_con_from_hdl(hdl);
@@ -265,6 +294,7 @@ private:
         }
         else if (uri == "/room")
         {
+            return wsopen_game_room(conn);
         }
     }
     void wsclose_game_hall(wsserver_t::connection_ptr conn)
