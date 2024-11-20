@@ -281,6 +281,10 @@ private:
         _sm.set_session_expire_time(ssp->ssid(),SESSION_FOREVER);
         resp_json["optype"] = "room_ready";
         resp_json["result"] = true;
+        resp_json["room_id"]=(Json::UInt64)rp->id();
+        resp_json["uid"]=(Json::UInt64)ssp->get_user();
+        resp_json["white_id"]=(Json::UInt64)rp->get_white_user();
+        resp_json["black_id"]=(Json::UInt64)rp->get_black_user();
         return ws_resp(conn,resp_json);
     }
     void wsopen_callback(websocketpp::connection_hdl hdl)
@@ -299,34 +303,24 @@ private:
     }
     void wsclose_game_hall(wsserver_t::connection_ptr conn)
     {
-        Json::Value err_resp;
-        std::string cookie_str = conn->get_request_header("Cookie");
-        if (cookie_str.empty())
-        {
-            err_resp["optype"] = "hall_ready";
-            err_resp["reason"] = "没有找到cookie信息,需要重新登录";
-            err_resp["result"] = false;
-            return ws_resp(conn, err_resp);
-        }
-        std::string ssid_str;
-        bool ret = get_cookie_val(cookie_str, "SSID", ssid_str);
-        if (ret == false)
-        {
-            err_resp["optype"] = "hall_ready";
-            err_resp["reason"] = "没有找到SSID信息,需要重新登录";
-            err_resp["result"] = false;
-            return ws_resp(conn, err_resp);
-        }
-        session_ptr ssp = _sm.get_session_by_ssid(std::stol(ssid_str));
+        session_ptr ssp = get_session_by_cookie(conn);
         if (ssp.get() == nullptr)
         {
-            err_resp["optype"] = "hall_ready";
-            err_resp["reason"] = "没有找到session信息,需要重新登录";
-            err_resp["result"] = false;
-            return ws_resp(conn, err_resp);
+            return;
         }
         _om.exit_game_hall(ssp->get_user());
         _sm.set_session_expire_time(ssp->ssid(), SESSION_TIMEOUT);
+    }
+    void wsclose_game_room(wsserver_t::connection_ptr conn)
+    {
+        session_ptr ssp = get_session_by_cookie(conn);
+        if (ssp.get() == nullptr)
+        {
+            return;
+        }
+        _om.exit_game_room(ssp->get_user());
+        _sm.set_session_expire_time(ssp->ssid(), SESSION_TIMEOUT);
+        _rm.remove_room_user(ssp->get_user());
     }
     void wsclose_callback(websocketpp::connection_hdl hdl)
     {
@@ -339,6 +333,7 @@ private:
         }
         else if (uri == "/room")
         {
+            return wsclose_game_room(conn);
         }
     }
     void wsmsg_game_hall(wsserver_t::connection_ptr conn, wsserver_t::message_ptr msg)
@@ -377,6 +372,34 @@ private:
         resp_json["result"] = false;
         return ws_resp(conn, resp_json);
     }
+    void wsmsg_game_room(wsserver_t::connection_ptr conn,wsserver_t::message_ptr msg)
+    {
+        Json::Value resp_json;
+        session_ptr ssp = get_session_by_cookie(conn);
+        if (ssp.get() == nullptr)
+        {
+            return;
+        }
+        room_ptr rp=_rm.get_room_by_uid(ssp->get_user());
+        if(rp.get()==nullptr)
+        {
+            resp_json["optype"] = "unknow";
+            resp_json["reason"] = "没有找到玩家的房间信息!";
+            resp_json["result"] = false;
+            return ws_resp(conn, resp_json);
+        }
+        Json::Value req_json;
+        std::string req_body=msg->get_payload();
+        bool ret=json_util::unserialize(req_body,req_json);
+        if(ret==false)
+        {
+            resp_json["optype"] = "unknow";
+            resp_json["reason"] = "请求解析失败";
+            resp_json["result"] = false;
+            return ws_resp(conn, resp_json);
+        }
+        return rp->handle_request(req_json);
+    }
     void wsmsg_callback(websocketpp::connection_hdl hdl, wsserver_t::message_ptr msg)
     {
         wsserver_t::connection_ptr conn = _wssrv.get_con_from_hdl(hdl);
@@ -388,6 +411,7 @@ private:
         }
         else if (uri == "/room")
         {
+            return wsmsg_game_room(conn, msg);
         }
     }
 

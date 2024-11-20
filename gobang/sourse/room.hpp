@@ -160,6 +160,7 @@ public:
         Json::Value json_resp;
         if (_statu == GAME_START)
         {
+            uint64_t winner_id = (Json::UInt64)(uid == _white_id ? _black_id : _white_id);
             json_resp["optype"] = "put_chess";
             json_resp["result"] = true;
             json_resp["reason"] = "对方掉线,不战而胜!";
@@ -168,6 +169,10 @@ public:
             json_resp["row"] = -1;
             json_resp["col"] = -1;
             json_resp["winner"] = (Json::UInt64)(uid == _white_id ? _black_id : _white_id);
+            uint64_t loser_id = winner_id == _white_id ? _black_id : _white_id;
+            _tb_user->win(winner_id);
+            _tb_user->lose(loser_id);
+            _statu = GAME_OVER;
             broadcast(json_resp);
         }
         _player_count--;
@@ -206,6 +211,9 @@ public:
             json_resp["result"] = false;
             json_resp["reason"] = "未知请求类型";
         }
+        std::string body;
+        json_util::serialize(json_resp, body);
+        DLOG("房间-⼴播动作: %s", body.c_str());
         return broadcast(json_resp);
     }
     void broadcast(Json::Value &rsp)
@@ -217,10 +225,18 @@ public:
         {
             wconn->send(body);
         }
+        else
+        {
+            DLOG("房间-⽩棋玩家连接获取失败");
+        }
         wsserver_t::connection_ptr bconn = _online_user->get_conn_from_room(_black_id);
         if (wconn.get() != nullptr)
         {
             wconn->send(body);
+        }
+        else
+        {
+            DLOG("房间-⿊棋玩家连接获取失败");
         }
         return;
     }
